@@ -1,0 +1,188 @@
+--- Another Practice Project: Honing Analytical SQL Skills on BigQuery by Analyzing a Dataset Pertaining to Information About Data Science Roles
+
+-- Looking at the Uploaded Data, First and Foremost
+
+SELECT *
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+
+-- Looking at the Amount of Jobs Held in Each Different Type of Role & Ordering from Most to Least
+
+SELECT COUNT(*), job_title
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+GROUP BY job_title
+ORDER BY COUNT(*) DESC
+
+-- Exploring the Data
+
+SELECT salary_in_usd, employee_residence, job_title
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+GROUP BY employee_residence, salary_in_usd, job_title
+
+SELECT DISTINCT experience_level
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+
+-- Pivoting to See Average USD Salaries by Each Experience Level & its Respective Job Title and Location
+
+WITH ImpData AS (
+  SELECT experience_level, job_title, employee_residence, 
+  ROUND(AVG(salary_in_usd), 2) Average_Salary_USD
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  GROUP BY experience_level, job_title, employee_residence, salary_in_usd
+)
+SELECT *
+From ImpData
+PIVOT (
+  MAX(Average_Salary_USD) FOR experience_level IN ("EN", "EX", "MI", "SE")
+) AS Pivoted_Salary_By_Experience
+ORDER BY job_title
+
+-- Practicing Creating Subqueries from the same Dataset to Manipulate and then JOIN
+
+WITH SalariesByYear AS (
+  SELECT work_year, employee_residence, job_title,
+  ROUND(AVG(salary_in_usd), 2) AS Average_Salary_USD
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  GROUP BY work_year, employee_residence, job_title
+)
+SELECT *
+FROM (
+SELECT *
+FROM SalariesByYear
+PIVOT (
+    MAX(Average_Salary_USD) FOR job_title IN ("Data Scientist", "Applied Data Scientist", "Data Analyst")
+  ) AS PivotedAVGSalaryByTitle
+) SalariesPivot
+JOIN (
+  SELECT job_title, remote_ratio
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  GROUP BY job_title, remote_ratio
+)
+WorkTypeByYear ON SalariesPivot.job_title = WorkTypeByYear.job_title;
+
+-- Temp Tables
+
+WITH AverageSalaries AS (
+  SELECT experience_level, job_title, ROUND(AVG(salary_in_usd), 2) AS Average_Salary_USD
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  GROUP BY experience_level, job_title
+),
+RemoteRatios AS (
+  SELECT experience_level, remote_ratio
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  GROUP BY experience_level, remote_ratio
+)
+SELECT *
+FROM AverageSalaries
+JOIN RemoteRatios ON AverageSalaries.experience_level = RemoteRatios.experience_level;
+
+-- Calculating the Amount of Jobs by Each Experience Level
+
+SELECT COUNT(job_title) AS Jobs, experience_level
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+GROUP BY experience_level
+HAVING COUNT(job_title) > 100
+
+-- CASE WHEN Classification for Average Salaries of Each Role
+
+SELECT job_title, ROUND(AVG(salary_in_usd), 2) AS Average_Salary_USD,
+  CASE
+    WHEN ROUND(AVG(salary_in_usd), 2) > 150000 THEN "Rich Level"
+    WHEN ROUND(AVG(salary_in_usd), 2) > 100000 THEN "High Level"
+    WHEN ROUND(AVG(salary_in_usd), 2) > 70000 THEN "Well-Paying"
+  ELSE
+    "Normal"
+END AS Salary_Classification
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+GROUP BY job_title
+
+-- SELFJOIN
+
+SELECT A.salary_in_usd AS SalaryUSD1, ROUND(AVG(B.salary_in_usd), 2) AS AVGSalaryUSD, A.experience_level
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career` A, `aerial-prism-392004.Google_Capstone_Project.datascience_career` B
+WHERE A.experience_level = B.experience_level
+GROUP BY A.salary_in_usd, B.salary_in_usd, A.experience_level
+
+SELECT ROUND(AVG(salary_in_usd), 2) AS AVGSalaryUSD, job_title AS Job_Title,
+CASE
+  WHEN ROUND(AVG(salary_in_usd), 2) > 130000 THEN "Great-Paying"
+  WHEN ROUND(AVG(salary_in_usd), 2) > 100000 THEN "Well-Paying"
+END AS Salary_Class
+FROM
+(SELECT a.job_title AS Job_Title, salary_in_usd
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career` a
+WHERE job_title = 'Data Analyst'
+OR job_title = 'Data Scientist'
+OR job_title = 'Applied Data Scientist'
+)
+GROUP BY job_title
+ORDER BY AVGSalaryUSD DESC
+
+-- Pivoting to Check Salary Changes for Certain Roles
+
+SELECT *
+FROM (
+  SELECT work_year, job_title, ROUND(AVG(salary_in_usd), 2) AS AverageSalaryUSD
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  WHERE job_title IN ('Data Analyst', 'Data Scientist', 'Applied Data Scientist')
+  GROUP BY work_year, job_title
+)
+PIVOT (
+  MAX(AverageSalaryUSD) FOR job_title IN ('Data Analyst', 'Data Scientist', 'Applied Data Scientist')
+) AS PivotTable;
+
+-- Pivoting to Decipher Average USD Salary Trends by Experience Level for The Aforementioned Roles
+
+SELECT *
+FROM (
+  SELECT experience_level, job_title, ROUND(AVG(salary_in_usd), 2) AS AverageSalaryUSD
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+  WHERE job_title IN ('Data Analyst', 'Data Scientist', 'Applied Data Scientist', 'Data Engineer', 'BI Analyst', 'BI Data Analyst') -- using IN with a list of job titles (instead of OR) because I am filtering rows based on equality conditions for a specific column ("job_title"). The IN clause succinctly expresses that I am interested in Rows where the job_title is one of the specified titles. If I had different conditions for each job title, OR might have been more suitable.
+  GROUP BY experience_level, job_title
+)
+PIVOT (
+  MAX(AverageSalaryUSD) FOR job_title IN ('Data Analyst', 'Data Scientist', 'Applied Data Scientist', 'Data Engineer', 'BI Analyst', 'BI Data Analyst')
+) AS PivotTable;
+
+--
+
+SELECT a.job_title, a.experience_level, a.salary_in_usd, a.employee_residence
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career` a
+JOIN (
+  SELECT experience_level, salary_in_usd
+  FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+) b ON a.experience_level = b.experience_level AND a.salary_in_usd < 100000
+WHERE a.experience_level = 'EX';
+
+-- Checking Salary Tendencies by Job Title
+
+SELECT job_title, salary_in_usd, ROUND((AVG(salary_in_usd) OVER(PARTITION BY job_title)), 2) AS job_avg,
+MIN(salary_in_usd) OVER(PARTITION BY job_title) AS job_min,
+MAX(salary_in_usd) OVER(PARTITION BY job_title) AS job_max
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+
+-- Calculating Salary Trends by Role as Well as Overall Patterns
+
+SELECT job_title, salary_in_usd, ROUND((AVG(salary_in_usd) OVER(PARTITION BY job_title)), 2) AS job_avg,
+RANK() OVER(ORDER BY salary_in_usd DESC) AS overall_rank,
+RANK() OVER(PARTITION BY job_title ORDER BY salary_in_usd DESC) AS job_salary_rank
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+
+-- Calculating Data Science Salary Trends by Experience Level
+
+SELECT job_title, experience_level, salary_in_usd, ROUND((AVG(salary_in_usd) OVER(PARTITION BY experience_level)), 2) AS experience_avg,
+MIN(salary_in_usd) OVER(PARTITION BY experience_level) AS experience_min,
+MAX(salary_in_usd) OVER(PARTITION BY experience_level) AS experience_max
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+
+-- Let's Go Back and See Numbers for my own Current Domain: Data Analytics!
+
+SELECT job_title, salary_in_usd, employee_residence, experience_level, employment_type
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+WHERE job_title LIKE '%Analyst'
+
+-- Analyzing the Types of Jobs in a Specific Salary Range
+
+SELECT salary_in_usd, experience_level, job_title, employment_type, employee_residence
+FROM `aerial-prism-392004.Google_Capstone_Project.datascience_career`
+WHERE salary_in_usd BETWEEN 50000 AND 100000
+ORDER BY salary_in_usd
